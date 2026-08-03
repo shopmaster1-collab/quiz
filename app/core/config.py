@@ -11,7 +11,6 @@ class Settings(BaseSettings):
     app_env: str = "development"
     public_base_url: str = "http://localhost:8000"
     database_url: str
-
     allowed_origins: str = "http://localhost:8000"
 
     deepseek_api_key: str = ""
@@ -40,6 +39,25 @@ class Settings(BaseSettings):
     def allowed_origins_list(self) -> list[str]:
         """SECCIÓN: CORS PARSER — Convierte dominios separados por coma en lista."""
         return [origin.strip() for origin in self.allowed_origins.split(",") if origin.strip()]
+
+    @property
+    def sqlalchemy_database_url(self) -> str:
+        """
+        SECCIÓN: DATABASE URL NORMALIZER
+        FUNCIÓN: Convierte la URL de Render para usar psycopg versión 3.
+        """
+        raw_url = self.database_url.strip()
+
+        if raw_url.startswith("postgresql+psycopg://"):
+            return raw_url
+
+        if raw_url.startswith("postgresql://"):
+            return raw_url.replace("postgresql://", "postgresql+psycopg://", 1)
+
+        if raw_url.startswith("postgres://"):
+            return raw_url.replace("postgres://", "postgresql+psycopg://", 1)
+
+        return raw_url
 
 
 @lru_cache

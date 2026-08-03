@@ -12,8 +12,9 @@ class Base(DeclarativeBase):
     pass
 
 
+# SECCIÓN: DATABASE ENGINE — Usa la URL normalizada con psycopg versión 3.
 engine = create_engine(
-    settings.database_url,
+    settings.sqlalchemy_database_url,
     pool_pre_ping=True,
     future=True,
 )
