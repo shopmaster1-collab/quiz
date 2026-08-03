@@ -1,0 +1,47 @@
+# SECCIÓN: GITHUB ACTIONS — Ejecuta pruebas en cada push y pull request
+name: Tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      # SECCIÓN: CI POSTGRES — Base temporal para pruebas futuras
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: masterquiz
+          POSTGRES_USER: masterquiz
+          POSTGRES_PASSWORD: masterquiz
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U masterquiz"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgresql+psycopg://masterquiz:masterquiz@localhost:5432/masterquiz
+
+    steps:
+      # SECCIÓN: CI CHECKOUT — Descarga el repositorio
+      - uses: actions/checkout@v4
+
+      # SECCIÓN: CI PYTHON — Prepara Python
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # SECCIÓN: CI INSTALL — Instala dependencias
+      - run: pip install -r requirements.txt
+
+      # SECCIÓN: CI MIGRATE — Prepara esquema
+      - run: alembic upgrade head
+
+      # SECCIÓN: CI TEST — Ejecuta pytest
+      - run: pytest

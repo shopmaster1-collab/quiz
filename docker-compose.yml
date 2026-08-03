@@ -1,0 +1,17 @@
+# SECCIÓN: DOCKER COMPOSE — Base PostgreSQL local para desarrollo
+services:
+  db:
+    image: postgres:17
+    container_name: master_sensor_quiz_db
+    environment:
+      POSTGRES_DB: masterquiz
+      POSTGRES_USER: masterquiz
+      POSTGRES_PASSWORD: masterquiz
+    ports:
+      - "5432:5432"
+    volumes:
+      - master_sensor_quiz_data:/var/lib/postgresql/data
+
+volumes:
+  # SECCIÓN: DOCKER VOLUME — Persistencia local de PostgreSQL
+  master_sensor_quiz_data:

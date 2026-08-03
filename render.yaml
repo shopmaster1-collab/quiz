@@ -1,0 +1,63 @@
+# SECCIÓN: RENDER BLUEPRINT — Infraestructura completa del proyecto
+services:
+  - type: web
+    name: master-sensor-quiz-api
+    runtime: python
+    plan: starter
+
+    # SECCIÓN: RENDER BUILD — Instala paquetes y aplica migraciones
+    buildCommand: pip install -r requirements.txt && alembic upgrade head
+
+    # SECCIÓN: RENDER START — Inicia FastAPI usando el puerto asignado
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+
+    # SECCIÓN: RENDER HEALTH CHECK — Verifica que el servicio responda
+    healthCheckPath: /health
+
+    # SECCIÓN: RENDER AUTO DEPLOY — Despliega cada cambio de la rama enlazada
+    autoDeploy: true
+
+    envVars:
+      # SECCIÓN: RENDER DATABASE — Obtiene la URL interna de PostgreSQL
+      - key: DATABASE_URL
+        fromDatabase:
+          name: master-sensor-quiz-db
+          property: connectionString
+
+      # SECCIÓN: RENDER APP — Configuración del ambiente
+      - key: APP_ENV
+        value: production
+
+      - key: PUBLIC_BASE_URL
+        sync: false
+
+      # SECCIÓN: RENDER CORS — Capturar dominios autorizados en el panel
+      - key: ALLOWED_ORIGINS
+        sync: false
+
+      # SECCIÓN: RENDER DEEPSEEK — Claves privadas, no se guardan en GitHub
+      - key: DEEPSEEK_API_KEY
+        sync: false
+
+      - key: DEEPSEEK_BASE_URL
+        value: https://api.deepseek.com
+
+      - key: DEEPSEEK_MODEL
+        value: deepseek-v4-flash
+
+      - key: DEEPSEEK_MAX_TOKENS
+        value: "700"
+
+      # SECCIÓN: RENDER ADMIN — Credenciales iniciales del panel
+      - key: ADMIN_USERNAME
+        sync: false
+
+      - key: ADMIN_PASSWORD
+        sync: false
+
+databases:
+  # SECCIÓN: RENDER POSTGRES — Base principal del Quiz
+  - name: master-sensor-quiz-db
+    plan: basic-256mb
+    databaseName: master_sensor_quiz
+    user: master_sensor_quiz

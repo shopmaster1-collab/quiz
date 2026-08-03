@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <!-- SECCIÓN: ADMIN META — Configuración del panel -->
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Administración | MASTER Sensor Quiz</title>
+
+  <!-- SECCIÓN: ADMIN STYLES — Estilos internos del MVP administrativo -->
+  <style>
+    body { font-family: Arial, sans-serif; margin: 0; background: #f4f7fa; color: #17212b; }
+    header { background: #102f50; color: #fff; padding: 22px; }
+    main { width: min(1180px, calc(100% - 32px)); margin: 28px auto; }
+    section { background: #fff; border: 1px solid #ccd7e0; border-radius: 12px; padding: 20px; margin-bottom: 22px; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 10px; border-bottom: 1px solid #e2e8ed; text-align: left; vertical-align: top; }
+    input, textarea, select { width: 100%; padding: 9px; margin: 5px 0 12px; box-sizing: border-box; }
+    textarea { min-height: 130px; font-family: monospace; }
+    button { background: #102f50; color: white; border: 0; padding: 10px 16px; cursor: pointer; border-radius: 6px; }
+    .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+    .notice { padding: 12px; background: #fff3cd; border: 1px solid #ffe69c; }
+    @media (max-width: 700px) { .grid { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <!-- SECCIÓN: ADMIN HEADER — Identidad y alcance del panel -->
+  <header>
+    <h1>MASTER Sensor Quiz · Panel de control</h1>
+    <p>Versión inicial para productos y estructura del cuestionario.</p>
+  </header>
+
+  <main>
+    <!-- SECCIÓN: ADMIN AUTH NOTICE — Explica autenticación del MVP -->
+    <p class="notice">
+      El navegador solicitará usuario y contraseña mediante HTTP Basic.
+      En producción se sustituirá por usuarios con sesión y permisos.
+    </p>
+
+    <!-- SECCIÓN: PRODUCT FORM — Alta rápida de productos futuros -->
+    <section>
+      <h2>Agregar producto</h2>
+      <form id="product-form">
+        <div class="grid">
+          <label>SKU<input name="sku" required></label>
+          <label>Nombre<input name="name" required></label>
+          <label>Categoría<input name="category" required placeholder="agua, gas, electricidad…"></label>
+          <label>URL Shopify<input name="shopify_url" type="url"></label>
+          <label>URL de imagen<input name="image_url" type="url"></label>
+          <label>ID de variante Shopify<input name="shopify_variant_id"></label>
+        </div>
+
+        <label>Descripción corta<textarea name="short_description"></textarea></label>
+
+        <label>
+          Perfil técnico JSON
+          <textarea name="technical_profile" required>{
+  "measurement_target": "water_level"
+}</textarea>
+        </label>
+
+        <button type="submit">Guardar producto</button>
+        <span id="product-message" role="status"></span>
+      </form>
+    </section>
+
+    <!-- SECCIÓN: PRODUCT LIST — Inventario técnico actual -->
+    <section>
+      <h2>Productos configurados</h2>
+      <button id="reload-products" type="button">Actualizar lista</button>
+      <div id="products-container">Cargando…</div>
+    </section>
+
+    <!-- SECCIÓN: QUESTION LIST — Visualización del árbol -->
+    <section>
+      <h2>Preguntas y transiciones</h2>
+      <button id="reload-questions" type="button">Actualizar árbol</button>
+      <div id="questions-container">Cargando…</div>
+    </section>
+  </main>
+
+  <!-- SECCIÓN: ADMIN SCRIPT — Consume endpoints administrativos protegidos -->
+  <script>
+    "use strict";
+
+    /* SECCIÓN: ADMIN API — El navegador reutiliza credenciales Basic solicitadas. */
+    async function request(path, options = {}) {
+      const response = await fetch(path, {
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        ...options,
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.detail || "Error administrativo.");
+      return payload;
+    }
+
+    /* SECCIÓN: ADMIN ESCAPE — Protege tablas contra HTML no deseado. */
+    function esc(value) {
+      return String(value ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;");
+    }
+
+    /* SECCIÓN: ADMIN PRODUCTS — Carga productos actuales. */
+    async function loadProducts() {
+      const container = document.getElementById("products-container");
+      try {
+        const products = await request("/api/v1/admin/products");
+        container.innerHTML = `
+          <table>
+            <thead><tr><th>SKU</th><th>Nombre</th><th>Categoría</th><th>Activo</th><th>Shopify</th></tr></thead>
+            <tbody>
+              ${products.map(product => `
+                <tr>
+                  <td>${esc(product.sku)}</td>
+                  <td>${esc(product.name)}</td>
+                  <td>${esc(product.category)}</td>
+                  <td>${product.active ? "Sí" : "No"}</td>
+                  <td>${product.shopify_url ? `<a href="${esc(product.shopify_url)}" target="_blank">Abrir</a>` : "Pendiente"}</td>
+                </tr>
+              `).join("")}
+            </tbody>
+          </table>
+        `;
+      } catch (error) {
+        container.textContent = error.message;
+      }
+    }
+
+    /* SECCIÓN: ADMIN QUESTIONS — Muestra opciones y siguiente pregunta. */
+    async function loadQuestions() {
+      const container = document.getElementById("questions-container");
+      try {
+        const questions = await request("/api/v1/admin/questions");
+        container.innerHTML = questions.map(question => `
+          <article>
+            <h3>${esc(question.code)} · ${esc(question.title)}</h3>
+            <ul>
+              ${question.options.map(option => `
+                <li>${esc(option.label)} → ${esc(option.next_question_code || "FIN / ruta dinámica")}</li>
+              `).join("")}
+            </ul>
+          </article>
+        `).join("");
+      } catch (error) {
+        container.textContent = error.message;
+      }
+    }
+
+    /* SECCIÓN: ADMIN PRODUCT CREATE — Convierte formulario en JSON validado. */
+    document.getElementById("product-form").addEventListener("submit", async event => {
+      event.preventDefault();
+      const form = event.currentTarget;
+      const data = new FormData(form);
+      const message = document.getElementById("product-message");
+
+      try {
+        const technicalProfile = JSON.parse(data.get("technical_profile"));
+        await request("/api/v1/admin/products", {
+          method: "POST",
+          body: JSON.stringify({
+            sku: data.get("sku"),
+            name: data.get("name"),
+            category: data.get("category"),
+            short_description: data.get("short_description") || null,
+            technical_profile: technicalProfile,
+            shopify_url: data.get("shopify_url") || null,
+            shopify_variant_id: data.get("shopify_variant_id") || null,
+            image_url: data.get("image_url") || null,
+            youtube_url: null,
+            tiktok_url: null,
+            manual_url: null,
+            active: true,
+          }),
+        });
+
+        message.textContent = "Producto guardado.";
+        form.reset();
+        loadProducts();
+      } catch (error) {
+        message.textContent = error.message;
+      }
+    });
+
+    /* SECCIÓN: ADMIN EVENTS — Botones de actualización manual. */
+    document.getElementById("reload-products").addEventListener("click", loadProducts);
+    document.getElementById("reload-questions").addEventListener("click", loadQuestions);
+
+    /* SECCIÓN: ADMIN BOOT — Carga contenido al abrir el panel. */
+    loadProducts();
+    loadQuestions();
+  </script>
+</body>
+</html>

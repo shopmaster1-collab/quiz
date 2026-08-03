@@ -1,0 +1,258 @@
+/* SECCIÓN: QUIZ DESIGN TOKENS — Variables visuales del componente */
+:root {
+  --master-navy: #102f50;
+  --master-blue: #087cbd;
+  --master-cyan: #18a9cc;
+  --master-green: #13a67a;
+  --master-light: #f4f8fb;
+  --master-border: #cbd7e1;
+  --master-text: #17212b;
+  --master-muted: #66717d;
+  --master-white: #ffffff;
+}
+
+/* SECCIÓN: QUIZ BASE — Normalización aislada del widget */
+#master-sensor-quiz,
+#master-sensor-quiz * {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: #fff;
+  color: var(--master-text);
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+.master-test-banner {
+  padding: 10px;
+  background: #fff3cd;
+  border-bottom: 1px solid #ffe69c;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+/* SECCIÓN: QUIZ SHELL — Contenedor central adaptable */
+.master-quiz-shell {
+  width: min(960px, calc(100% - 32px));
+  margin: 32px auto;
+  padding: 32px;
+  background: var(--master-white);
+  border: 1px solid var(--master-border);
+  border-radius: 18px;
+  box-shadow: 0 16px 40px rgba(16, 47, 80, 0.09);
+}
+
+/* SECCIÓN: QUIZ HEADER — Título y explicación principal */
+.master-quiz-header {
+  text-align: center;
+  margin-bottom: 24px;
+}
+
+.master-quiz-header h1 {
+  margin: 0 0 10px;
+  font-size: clamp(28px, 5vw, 46px);
+  font-family: Georgia, "Times New Roman", serif;
+  font-weight: 500;
+}
+
+.master-quiz-header p {
+  margin: 0;
+  color: var(--master-muted);
+}
+
+/* SECCIÓN: QUIZ PROGRESS — Barra de cinco etapas */
+.master-progress {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 8px;
+  margin: 28px 0;
+}
+
+.master-progress__step {
+  height: 8px;
+  border-radius: 20px;
+  background: #d8dee4;
+}
+
+.master-progress__step.is-active {
+  background: var(--master-navy);
+}
+
+/* SECCIÓN: QUESTION CARD — Pregunta activa */
+.master-question-card {
+  border: 1px solid var(--master-border);
+  border-radius: 14px;
+  padding: 24px;
+  background: var(--master-light);
+}
+
+.master-question-card h2 {
+  margin: 0 0 8px;
+  font-size: clamp(21px, 3vw, 28px);
+}
+
+.master-question-card p {
+  margin: 0 0 22px;
+  color: var(--master-muted);
+  line-height: 1.5;
+}
+
+/* SECCIÓN: OPTION GRID — Respuestas visuales seleccionables */
+.master-option-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.master-option {
+  min-height: 76px;
+  padding: 14px 16px;
+  border: 1px solid var(--master-border);
+  border-radius: 12px;
+  background: var(--master-white);
+  color: var(--master-text);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-align: left;
+  font-size: 16px;
+  transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.master-option:hover,
+.master-option:focus-visible {
+  transform: translateY(-2px);
+  border-color: var(--master-blue);
+  box-shadow: 0 8px 18px rgba(8, 124, 189, 0.12);
+  outline: none;
+}
+
+.master-option__icon {
+  font-size: 26px;
+}
+
+/* SECCIÓN: QUIZ STATUS — Carga y errores */
+.master-status {
+  padding: 28px;
+  text-align: center;
+  color: var(--master-muted);
+}
+
+.master-error {
+  padding: 16px;
+  border: 1px solid #ef9a9a;
+  border-radius: 10px;
+  background: #ffebee;
+  color: #8b1d1d;
+}
+
+/* SECCIÓN: RESULT HEADER — Resumen generado */
+.master-result-summary {
+  padding: 22px;
+  margin-bottom: 20px;
+  border-radius: 14px;
+  background: var(--master-navy);
+  color: var(--master-white);
+  line-height: 1.55;
+}
+
+/* SECCIÓN: PRODUCT CARD — Resultado comercial */
+.master-product-card {
+  display: grid;
+  grid-template-columns: minmax(190px, 32%) 1fr;
+  gap: 24px;
+  padding: 22px;
+  border: 1px solid var(--master-border);
+  border-radius: 14px;
+  margin-bottom: 18px;
+}
+
+.master-product-card img {
+  width: 100%;
+  height: 240px;
+  object-fit: contain;
+  background: #fff;
+}
+
+.master-product-card h2,
+.master-product-card h3 {
+  margin-top: 0;
+}
+
+.master-reasons {
+  padding-left: 20px;
+  line-height: 1.5;
+}
+
+.master-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.master-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 10px 18px;
+  border: 1px solid var(--master-navy);
+  background: var(--master-navy);
+  color: var(--master-white);
+  text-decoration: none;
+  border-radius: 7px;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.master-button--secondary {
+  background: var(--master-white);
+  color: var(--master-navy);
+}
+
+/* SECCIÓN: EMAIL FORM — Captura opcional y consentimientos */
+.master-email-box {
+  margin-top: 28px;
+  padding: 22px;
+  border-radius: 14px;
+  background: var(--master-light);
+}
+
+.master-email-box input[type="email"] {
+  width: 100%;
+  min-height: 46px;
+  padding: 10px 12px;
+  border: 1px solid var(--master-border);
+  border-radius: 7px;
+  margin: 10px 0;
+}
+
+.master-consent {
+  display: block;
+  margin: 10px 0;
+  line-height: 1.4;
+}
+
+/* SECCIÓN: RESPONSIVE — Ajustes para celular */
+@media (max-width: 680px) {
+  .master-quiz-shell {
+    width: 100%;
+    margin: 0;
+    border-radius: 0;
+    border-left: 0;
+    border-right: 0;
+    padding: 20px 14px;
+  }
+
+  .master-option-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .master-product-card {
+    grid-template-columns: 1fr;
+  }
+}

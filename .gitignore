@@ -1,0 +1,22 @@
+# SECCIÓN: PYTHON — Archivos generados por Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+
+# SECCIÓN: CONFIGURACIÓN — Secretos locales
+.env
+*.env.local
+
+# SECCIÓN: IDE — Configuración de editores
+.vscode/
+.idea/
+
+# SECCIÓN: SISTEMA — Archivos del sistema operativo
+.DS_Store
+Thumbs.db
+
+# SECCIÓN: BASE DE DATOS — Archivos locales temporales
+*.db
+*.sqlite3

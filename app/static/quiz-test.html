@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <!-- SECCIÓN: TEST META — Configuración de idioma y escala móvil -->
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <!-- SECCIÓN: TEST TITLE — Identifica claramente el ambiente de prueba -->
+  <title>Prueba | Encuentra tu sensor MASTER</title>
+
+  <!-- SECCIÓN: TEST STYLES — Hoja visual compartida con Shopify -->
+  <link rel="stylesheet" href="/static/quiz-widget.css">
+</head>
+<body>
+  <!-- SECCIÓN: TEST HEADER — Aviso para evitar confundir pruebas con producción -->
+  <header class="master-test-banner">
+    AMBIENTE DE PRUEBAS · Los enlaces comerciales todavía pueden estar vacíos
+  </header>
+
+  <!-- SECCIÓN: QUIZ CONTAINER — Punto donde JavaScript renderiza la experiencia -->
+  <main id="master-sensor-quiz"></main>
+
+  <!-- SECCIÓN: QUIZ SCRIPT — Inicializa el widget con la misma URL del servidor -->
+  <script
+    src="/static/quiz-widget.js"
+    data-api-base=""
+    data-container-id="master-sensor-quiz"
+    defer>
+  </script>
+</body>
+</html>
