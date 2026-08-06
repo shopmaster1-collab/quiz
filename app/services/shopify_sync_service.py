@@ -1,14 +1,15 @@
 """Sincronización controlada del catálogo público de master.mx.
 
-La tienda es la fuente de verdad para datos volátiles: nombre comercial, precio,
-imágenes, disponibilidad, URL y variante. La base del Quiz conserva únicamente
-una copia operativa para búsqueda y presentación; las reglas de diagnóstico se
-mantienen en ``technical_profile`` y están orientadas a necesidades/soluciones.
+Shopify es la fuente de verdad para los datos comerciales que cambian con
+frecuencia: nombre, precio, imágenes, disponibilidad, URL y variante. La base
+del Quiz conserva una copia operativa para búsqueda y presentación, mientras
+las reglas de diagnóstico permanecen separadas en ``technical_profile``.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from html import unescape
 import re
 from urllib.parse import urljoin
@@ -23,6 +24,8 @@ from app.models.models import Product
 
 _TAG_RE = re.compile(r"<[^>]+>")
 _SPACE_RE = re.compile(r"\s+")
+_HREF_RE = re.compile(r"href=[\"']([^\"']+)[\"']", re.IGNORECASE)
+_DOCUMENT_HINTS = ("manual", "ficha", "instructivo", "datasheet", "spec", ".pdf")
 
 
 @dataclass(slots=True)
@@ -44,6 +47,7 @@ class SyncReport:
 
 
 def _plain_text(value: str | None, limit: int = 1200) -> str | None:
+    """Convierte HTML comercial a texto breve y seguro para resultados."""
     if not value:
         return None
     text = unescape(_TAG_RE.sub(" ", value))
@@ -51,7 +55,19 @@ def _plain_text(value: str | None, limit: int = 1200) -> str | None:
     return text[:limit] or None
 
 
+def _document_url(body_html: str | None) -> str | None:
+    """Busca en la descripción un manual, ficha técnica o PDF publicado."""
+    if not body_html:
+        return None
+    for href in _HREF_RE.findall(body_html):
+        normalized = href.lower()
+        if any(hint in normalized for hint in _DOCUMENT_HINTS):
+            return urljoin(settings.shopify_store_url.rstrip("/") + "/", href)
+    return None
+
+
 def _category(product: dict) -> str:
+    """Clasificación comercial inicial; las reglas técnicas siguen separadas."""
     source = " ".join(
         str(product.get(key, ""))
         for key in ("title", "product_type", "tags", "handle")
@@ -68,29 +84,36 @@ def _category(product: dict) -> str:
 
 
 def _variant(product: dict) -> dict:
+    """Selecciona primero una variante disponible y conserva un fallback."""
     variants = product.get("variants") or []
     available = [item for item in variants if item.get("available")]
     return (available or variants or [{}])[0]
 
 
 def fetch_public_catalog() -> list[dict]:
-    """Descarga todas las páginas del endpoint público ``products.json``."""
+    """Descarga páginas del endpoint público ``products.json`` de Shopify."""
     base = settings.shopify_store_url.rstrip("/") + "/"
     products: list[dict] = []
-    page = 1
-    with httpx.Client(timeout=settings.shopify_sync_timeout, follow_redirects=True) as client:
-        while page <= settings.shopify_sync_max_pages:
+
+    with httpx.Client(
+        timeout=settings.shopify_sync_timeout,
+        follow_redirects=True,
+        headers={"User-Agent": "MASTER-Solution-Quiz/1.1"},
+    ) as client:
+        for page in range(1, settings.shopify_sync_max_pages + 1):
             response = client.get(
                 urljoin(base, "products.json"),
                 params={"limit": 250, "page": page},
-                headers={"User-Agent": "MASTER-Solution-Quiz/1.0"},
             )
             response.raise_for_status()
-            batch = response.json().get("products", [])
+            payload = response.json()
+            batch = payload.get("products", [])
+            if not isinstance(batch, list):
+                raise ValueError("Shopify devolvió un catálogo con formato inesperado.")
             products.extend(batch)
             if len(batch) < 250:
                 break
-            page += 1
+
     return products
 
 
@@ -99,11 +122,14 @@ def sync_catalog(db: Session, deactivate_missing: bool = False) -> SyncReport:
     source_products = fetch_public_catalog()
     report = SyncReport(fetched=len(source_products))
     seen_skus: set[str] = set()
+    synchronized_at = datetime.now(timezone.utc).isoformat()
+    store_base = settings.shopify_store_url.rstrip("/") + "/"
 
     for source in source_products:
         variant = _variant(source)
-        sku = str(variant.get("sku") or source.get("handle") or "").strip()
-        if not sku:
+        handle = str(source.get("handle") or "").strip()
+        sku = str(variant.get("sku") or handle).strip()
+        if not sku or not handle:
             report.skipped += 1
             continue
 
@@ -111,27 +137,41 @@ def sync_catalog(db: Session, deactivate_missing: bool = False) -> SyncReport:
         product = db.scalar(select(Product).where(Product.sku == sku))
         created = product is None
         if created:
-            product = Product(sku=sku, name=str(source.get("title") or sku), category=_category(source))
+            product = Product(
+                sku=sku,
+                name=str(source.get("title") or sku),
+                category=_category(source),
+            )
             db.add(product)
 
         images = source.get("images") or []
         product.name = str(source.get("title") or product.name)
-        product.category = product.category or _category(source)
         product.short_description = _plain_text(source.get("body_html"))
-        product.shopify_url = urljoin(settings.shopify_store_url.rstrip("/") + "/", f"products/{source.get('handle')}")
+        product.shopify_url = urljoin(store_base, f"products/{handle}")
         product.shopify_variant_id = str(variant.get("id") or "") or None
-        product.image_url = (images[0].get("src") if images else None)
+        product.image_url = images[0].get("src") if images else None
+        product.manual_url = _document_url(source.get("body_html")) or product.manual_url
         product.active = bool(variant.get("available", True))
 
         profile = dict(product.technical_profile or {})
+        previous_commerce = profile.get("commerce") or {}
+        if created or previous_commerce.get("source") == "shopify_public_catalog":
+            product.category = _category(source)
+
+        variant_id = product.shopify_variant_id
         profile["commerce"] = {
             "price": variant.get("price"),
             "compare_at_price": variant.get("compare_at_price"),
+            "currency": "MXN",
             "available": bool(variant.get("available", True)),
             "vendor": source.get("vendor"),
             "product_type": source.get("product_type"),
-            "handle": source.get("handle"),
+            "handle": handle,
+            "shopify_product_id": source.get("id"),
+            "variant_title": variant.get("title"),
+            "cart_url": urljoin(store_base, f"cart/add?id={variant_id}") if variant_id else None,
             "source": "shopify_public_catalog",
+            "synchronized_at": synchronized_at,
         }
         product.technical_profile = profile
         report.created += int(created)
