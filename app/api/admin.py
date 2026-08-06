@@ -1,13 +1,14 @@
-"""SECCIÓN: ADMIN API — CRUD sencillo para productos, preguntas y opciones."""
+"""SECCIÓN: ADMIN API — Gestión del diagnóstico, catálogo y sincronización."""
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from app.core.database import get_db
 from app.core.security import require_admin
-from app.models.models import Product, QuizOption, QuizQuestion
+from app.models.models import Product, QuizOption, QuizQuestion, QuizSession
 from app.schemas.admin import OptionUpsert, ProductUpsert, QuestionUpsert
+from app.services.shopify_sync_service import sync_catalog
 
 router = APIRouter(
     prefix="/api/v1/admin",
@@ -18,7 +19,7 @@ router = APIRouter(
 
 @router.get("/products")
 def list_products(db: Session = Depends(get_db)) -> list[dict]:
-    """SECCIÓN: ADMIN PRODUCT LIST — Lista productos para el panel."""
+    """Lista soluciones/productos disponibles para configurar el recomendador."""
     products = db.scalars(select(Product).order_by(Product.name)).all()
     return [
         {
@@ -28,15 +29,69 @@ def list_products(db: Session = Depends(get_db)) -> list[dict]:
             "category": product.category,
             "active": product.active,
             "shopify_url": product.shopify_url,
+            "image_url": product.image_url,
+            "manual_url": product.manual_url,
             "technical_profile": product.technical_profile,
         }
         for product in products
     ]
 
 
+@router.post("/catalog/sync")
+def synchronize_catalog(
+    deactivate_missing: bool = Query(
+        default=False,
+        description="Desactiva registros sincronizados que ya no aparezcan en Shopify.",
+    ),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Actualiza bajo demanda datos comerciales desde master.mx."""
+    try:
+        report = sync_catalog(db, deactivate_missing=deactivate_missing)
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=502,
+            detail=f"No fue posible sincronizar el catálogo de Shopify: {exc}",
+        ) from exc
+    return {
+        "ok": True,
+        "source": "master.mx",
+        "message": "Catálogo comercial actualizado. Las reglas de solución no fueron modificadas.",
+        "report": report.as_dict(),
+    }
+
+
+@router.get("/analytics/summary")
+def analytics_summary(db: Session = Depends(get_db)) -> dict:
+    """Resumen inicial de sesiones almacenadas para consultas y cotizaciones."""
+    sessions = db.scalars(select(QuizSession)).all()
+    statuses: dict[str, int] = {}
+    categories: dict[str, int] = {}
+    quote_requests = 0
+    for session in sessions:
+        statuses[session.status] = statuses.get(session.status, 0) + 1
+        profile = session.profile_json or {}
+        category = str(
+            profile.get("solution_area")
+            or profile.get("category")
+            or profile.get("need_type")
+            or "sin_clasificar"
+        )
+        categories[category] = categories.get(category, 0) + 1
+        if profile.get("request_quote") or profile.get("commercial_intent") == "quote":
+            quote_requests += 1
+    return {
+        "total_sessions": len(sessions),
+        "statuses": statuses,
+        "solution_areas": categories,
+        "quote_requests": quote_requests,
+    }
+
+
 @router.post("/products")
 def create_product(payload: ProductUpsert, db: Session = Depends(get_db)) -> dict:
-    """SECCIÓN: ADMIN PRODUCT CREATE — Agrega un producto futuro."""
+    """Agrega una solución comercial futura o no sincronizada."""
     if db.scalar(select(Product).where(Product.sku == payload.sku)):
         raise HTTPException(status_code=409, detail="El SKU ya existe.")
     product = Product(**payload.model_dump())
@@ -52,7 +107,7 @@ def update_product(
     payload: ProductUpsert,
     db: Session = Depends(get_db),
 ) -> dict:
-    """SECCIÓN: ADMIN PRODUCT UPDATE — Actualiza producto existente."""
+    """Actualiza capacidades, compatibilidades y enlaces de una solución."""
     product = db.get(Product, product_id)
     if not product:
         raise HTTPException(status_code=404, detail="Producto no encontrado.")
@@ -66,7 +121,7 @@ def update_product(
 
 @router.get("/questions")
 def list_questions(db: Session = Depends(get_db)) -> list[dict]:
-    """SECCIÓN: ADMIN QUESTION LIST — Lista árbol con opciones."""
+    """Lista el árbol de diagnóstico con sus opciones."""
     questions = db.scalars(
         select(QuizQuestion)
         .options(selectinload(QuizQuestion.options))
@@ -96,7 +151,7 @@ def list_questions(db: Session = Depends(get_db)) -> list[dict]:
 
 @router.post("/questions")
 def create_question(payload: QuestionUpsert, db: Session = Depends(get_db)) -> dict:
-    """SECCIÓN: ADMIN QUESTION CREATE — Agrega una pregunta."""
+    """Agrega una pregunta orientada al problema o contexto del usuario."""
     if db.scalar(select(QuizQuestion).where(QuizQuestion.code == payload.code)):
         raise HTTPException(status_code=409, detail="El código ya existe.")
     question = QuizQuestion(**payload.model_dump())
@@ -112,7 +167,7 @@ def create_option(
     payload: OptionUpsert,
     db: Session = Depends(get_db),
 ) -> dict:
-    """SECCIÓN: ADMIN OPTION CREATE — Agrega respuesta y transición."""
+    """Agrega una respuesta y su transición dentro del diagnóstico."""
     question = db.get(QuizQuestion, question_id)
     if not question:
         raise HTTPException(status_code=404, detail="Pregunta no encontrada.")
