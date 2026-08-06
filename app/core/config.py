@@ -7,11 +7,16 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     """SECCIÓN: SETTINGS MODEL — Define y valida la configuración."""
 
-    app_name: str = "MASTER Sensor Quiz"
+    app_name: str = "MASTER Diagnóstico de Soluciones"
     app_env: str = "development"
     public_base_url: str = "http://localhost:8000"
     database_url: str
     allowed_origins: str = "http://localhost:8000"
+
+    # SECCIÓN: SHOPIFY — Fuente de verdad para datos comerciales volátiles.
+    shopify_store_url: str = "https://master.mx"
+    shopify_sync_timeout: float = 30.0
+    shopify_sync_max_pages: int = 10
 
     deepseek_api_key: str = ""
     deepseek_base_url: str = "https://api.deepseek.com"
