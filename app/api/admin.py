@@ -1,13 +1,14 @@
-"""SECCIÓN: ADMIN API — CRUD sencillo para productos, preguntas y opciones."""
+"""SECCIÓN: ADMIN API — Gestión del diagnóstico, catálogo y sincronización."""
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from app.core.database import get_db
 from app.core.security import require_admin
-from app.models.models import Product, QuizOption, QuizQuestion
+from app.models.models import Product, QuizOption, QuizQuestion, QuizSession
 from app.schemas.admin import OptionUpsert, ProductUpsert, QuestionUpsert
+from app.services.shopify_sync_service import sync_catalog
 
 router = APIRouter(
     prefix="/api/v1/admin",
@@ -32,6 +33,55 @@ def list_products(db: Session = Depends(get_db)) -> list[dict]:
         }
         for product in products
     ]
+
+
+@router.post("/catalog/sync")
+def synchronize_catalog(
+    deactivate_missing: bool = Query(default=False),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Actualiza bajo demanda los datos comerciales desde master.mx."""
+    try:
+        report = sync_catalog(db, deactivate_missing=deactivate_missing)
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=502,
+            detail=f"No fue posible sincronizar el catálogo de Shopify: {exc}",
+        ) from exc
+    return {
+        "ok": True,
+        "source": "master.mx",
+        "message": "Catálogo comercial actualizado. Las reglas de solución no fueron modificadas.",
+        "report": report.as_dict(),
+    }
+
+
+@router.get("/analytics/summary")
+def analytics_summary(db: Session = Depends(get_db)) -> dict:
+    """Resume sesiones almacenadas, áreas de solución e intención de cotización."""
+    sessions = db.scalars(select(QuizSession)).all()
+    statuses: dict[str, int] = {}
+    categories: dict[str, int] = {}
+    quote_requests = 0
+    for session in sessions:
+        statuses[session.status] = statuses.get(session.status, 0) + 1
+        profile = session.profile_json or {}
+        category = str(
+            profile.get("solution_area")
+            or profile.get("category")
+            or profile.get("need_type")
+            or "sin_clasificar"
+        )
+        categories[category] = categories.get(category, 0) + 1
+        if profile.get("request_quote") or profile.get("commercial_intent") == "quote":
+            quote_requests += 1
+    return {
+        "total_sessions": len(sessions),
+        "statuses": statuses,
+        "solution_areas": categories,
+        "quote_requests": quote_requests,
+    }
 
 
 @router.post("/products")
